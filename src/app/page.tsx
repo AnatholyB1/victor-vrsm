@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Script from "next/script";
+import { useContactForm } from "@/hooks/useContactForm";
 
 // Icons as simple SVG components
 const InstagramIcon = () => (
@@ -64,65 +65,87 @@ const TrendingUpIcon = () => (
   </svg>
 );
 
+// Services data
+const services = [
+  {
+    icon: <DumbbellIcon />,
+    title: "Coaching Personnalisé",
+    description: "Plans d'entraînement adaptés à votre niveau et vos objectifs.",
+  },
+  {
+    icon: <TargetIcon />,
+    title: "Plans Nutrition",
+    description: "Conseils nutritionnels pour maximiser vos résultats.",
+  },
+  {
+    icon: <HeartIcon />,
+    title: "Suivi Motivationnel",
+    description: "Support quotidien pour rester motivé et atteindre vos buts.",
+  },
+  {
+    icon: <TrendingUpIcon />,
+    title: "Résultats Mesurables",
+    description: "Suivi précis de vos progrès avec des métriques claires.",
+  },
+];
+
+// Testimonials data
+const testimonials = [
+  {
+    avatar: "JD",
+    name: "Jean Dupont",
+    result: "-15 kg en 3 mois",
+    text: "Victor m'a aidé à transformer ma vie. Son approche personnalisée et son soutien constant ont été décisifs.",
+  },
+  {
+    avatar: "MB",
+    name: "Marie Beaumont",
+    result: "+8 kg de muscle",
+    text: "Incroyable ! En 4 mois, j'ai gagné du muscle et perdu de la graisse. Victor sait vraiment ce qu'il fait.",
+  },
+  {
+    avatar: "PP",
+    name: "Pierre Paulin",
+    result: "Transformation complète",
+    text: "Le meilleur investissement que j'ai pu faire. Victor change les vies, c'est un vrai champion.",
+  },
+];
+
+// JSON-LD Schema
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "Victor Verissimo - Coach Sportif",
+  "description": "Coach sportif certifié spécialisé en transformation physique et coaching personnalisé.",
+  "url": "https://victorverissimo.com",
+  "telephone": "+33635593164",
+  "email": "vverissimo.victor@gmail.com",
+  "address": {
+    "@type": "PostalAddress",
+    "addressCountry": "FR",
+  },
+  "sameAs": [
+    "https://instagram.com/victor_vrsm",
+  ],
+};
+
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { submit, isLoading, isSuccess, isError, error } = useContactForm();
 
-  const services = [
-    {
-      icon: <DumbbellIcon />,
-      title: "Transformation Physique",
-      description: "Programme personnalisé pour sculpter votre corps et atteindre vos objectifs, adapté à votre niveau.",
-    },
-    {
-      icon: <TargetIcon />,
-      title: "Coaching Personnalisé",
-      description: "Suivi individuel avec des exercices adaptés à vos capacités et votre emploi du temps.",
-    },
-    {
-      icon: <HeartIcon />,
-      title: "Nutrition & Bien-être",
-      description: "Conseils nutritionnels pour optimiser vos résultats et améliorer votre santé globale.",
-    },
-    {
-      icon: <TrendingUpIcon />,
-      title: "Suivi de Progression",
-      description: "Mesures régulières et ajustements pour garantir une progression constante.",
-    },
-  ];
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
 
-  const testimonials = [
-    {
-      name: "Marie L.",
-      result: "-15kg en 4 mois",
-      text: "Victor m'a accompagnée tout au long de ma transformation. Son approche bienveillante et ses conseils m'ont permis d'atteindre mes objectifs sans jamais me sentir dépassée.",
-      avatar: "M",
-    },
-    {
-      name: "Thomas D.",
-      result: "+8kg de muscle",
-      text: "En tant que débutant, j'avais peur de ne pas être à la hauteur. Victor a su adapter chaque séance à mon niveau et me faire progresser sereinement.",
-      avatar: "T",
-    },
-    {
-      name: "Sophie R.",
-      result: "Transformation complète",
-      text: "Le meilleur investissement que j'ai fait pour ma santé. Victor est un coach exceptionnel qui s'adapte vraiment à chaque personne.",
-      avatar: "S",
-    },
-  ];
+    const ok = await submit({
+      nom: String(fd.get("nom") ?? ""),
+      email: String(fd.get("email") ?? ""),
+      objectif: String(fd.get("objectif") ?? ""),
+      message: String(fd.get("message") ?? ""),
+    });
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "ProfessionalService",
-    name: "Victor Verissimo Coaching",
-    description:
-      "Coaching sportif personnalisé pour transformation physique, perte de poids et prise de masse.",
-    url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com",
-    sameAs: ["https://instagram.com/victor_vrsm"],
-    telephone: "+33 6 35 59 31 64",
-    email: "vverissimo.victor@gmail.com",
-    areaServed: "FR",
-    inLanguage: "fr-FR",
+    if (ok) form.reset();
   };
 
   return (
@@ -492,7 +515,7 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <form className="space-y-6">
+                  <form className="space-y-6" onSubmit={handleSubmit}>
                     <div>
                       <label htmlFor="name" className="block text-gray-300 mb-2">
                         Nom complet
@@ -500,10 +523,13 @@ export default function Home() {
                       <input
                         type="text"
                         id="name"
+                        name="nom"
                         className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-lime-500 transition-colors"
                         placeholder="Votre nom"
+                        required
                       />
                     </div>
+
                     <div>
                       <label htmlFor="email" className="block text-gray-300 mb-2">
                         Email
@@ -511,17 +537,22 @@ export default function Home() {
                       <input
                         type="email"
                         id="email"
+                        name="email"
                         className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-lime-500 transition-colors"
                         placeholder="votre@email.com"
+                        required
                       />
                     </div>
+
                     <div>
                       <label htmlFor="goal" className="block text-gray-300 mb-2">
                         Votre objectif
                       </label>
                       <select
                         id="goal"
+                        name="objectif"
                         className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-lime-500 transition-colors"
+                        required
                       >
                         <option value="" className="bg-gray-900">
                           Sélectionnez votre objectif
@@ -543,23 +574,31 @@ export default function Home() {
                         </option>
                       </select>
                     </div>
+
                     <div>
                       <label htmlFor="message" className="block text-gray-300 mb-2">
                         Message
                       </label>
                       <textarea
                         id="message"
+                        name="message"
                         rows={4}
                         className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-lime-500 transition-colors resize-none"
                         placeholder="Parlez-moi de votre situation et de vos objectifs..."
+                        required
                       />
                     </div>
+
                     <button
                       type="submit"
-                      className="w-full gradient-bg text-black font-bold py-4 rounded-xl hover:opacity-90 transition-all hover:scale-[1.02]"
+                      disabled={isLoading}
+                      className="w-full gradient-bg text-black font-bold py-4 rounded-xl hover:opacity-90 transition-all hover:scale-[1.02] disabled:opacity-60"
                     >
-                      Envoyer le Message
+                      {isLoading ? "Envoi..." : "Envoyer le Message"}
                     </button>
+
+                    {isSuccess && <p className="text-lime-500 text-sm">Message envoyé ✅</p>}
+                    {isError && <p className="text-red-400 text-sm">{error}</p>}
                   </form>
                 </div>
               </div>
