@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Script from "next/script";
 import { useContactForm } from "@/hooks/useContactForm";
 
@@ -111,6 +112,21 @@ const testimonials = [
   },
 ];
 
+const aboutFlipItems = [
+  {
+    src: "/logo.jpg",
+    alt: "Logo Victor Verissimo",
+  },
+  {
+    src: "/photo1.jpg",
+    alt: "Victor Verissimo en séance de musculation",
+  },
+  {
+    src: "/photo2.jpg",
+    alt: "Victor Verissimo en pose athlétique",
+  },
+];
+
 // JSON-LD Schema
 const jsonLd = {
   "@context": "https://schema.org",
@@ -131,6 +147,10 @@ const jsonLd = {
 
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [aboutFlipIndex, setAboutFlipIndex] = useState(0);
+  const [aboutNextFlipIndex, setAboutNextFlipIndex] = useState<number | null>(null);
+  const [isAboutFlipping, setIsAboutFlipping] = useState(false);
+  const [hasSeenFlipHint, setHasSeenFlipHint] = useState(false);
   const { submit, isLoading, isSuccess, isError, error } = useContactForm();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -148,6 +168,21 @@ export default function Home() {
     if (ok) form.reset();
   };
 
+  const handleAboutFlip = () => {
+    if (isAboutFlipping) return;
+    if (!hasSeenFlipHint) setHasSeenFlipHint(true);
+
+    const nextIndex = (aboutFlipIndex + 1) % aboutFlipItems.length;
+    setAboutNextFlipIndex(nextIndex);
+    setIsAboutFlipping(true);
+
+    setTimeout(() => {
+      setAboutFlipIndex(nextIndex);
+      setIsAboutFlipping(false);
+      setAboutNextFlipIndex(null);
+    }, 700);
+  };
+
   return (
     <>
       <Script
@@ -161,8 +196,16 @@ export default function Home() {
         <nav className="fixed top-0 left-0 right-0 z-50 glass">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
-              <a href="#" className="text-2xl font-bold gradient-text">
-                VICTOR VERISSIMO
+              <a href="#" className="flex items-center gap-3">
+                <Image
+                  src="/logo.jpg"
+                  alt="Logo Victor Verissimo"
+                  width={40}
+                  height={40}
+                  className="rounded-full border border-white/20"
+                  priority
+                />
+                <span className="text-2xl font-bold gradient-text">VICTOR VERISSIMO</span>
               </a>
 
               {/* Desktop Menu */}
@@ -273,6 +316,7 @@ export default function Home() {
                 <p className="text-gray-400">De Satisfaction</p>
               </div>
             </div>
+
           </div>
         </section>
 
@@ -284,9 +328,50 @@ export default function Home() {
                 <div className="aspect-square rounded-2xl overflow-hidden glass p-2">
                   <div className="w-full h-full rounded-xl bg-gradient-to-br from-lime-500/30 to-cyan-500/30 flex items-center justify-center">
                     <div className="text-center">
-                      <div className="w-48 h-48 mx-auto rounded-full bg-gradient-to-br from-lime-500 to-cyan-500 flex items-center justify-center text-6xl font-bold text-black">
-                        VV
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAboutFlip}
+                        className={`w-48 h-48 mx-auto rounded-full overflow-hidden border-2 perspective-distant block transition-all ${hasSeenFlipHint ? "border-white/20" : "border-lime-500/70 shadow-[0_0_0_6px_rgba(132,204,22,0.15)] animate-pulse"}`}
+                        aria-label="Faire pivoter la photo de profil"
+                      >
+                        {isAboutFlipping && aboutNextFlipIndex !== null ? (
+                          <div className="relative w-full h-full transform-3d transition-transform duration-700 transform-[rotateY(180deg)]">
+                            <div className="absolute inset-0 backface-hidden">
+                              <Image
+                                src={aboutFlipItems[aboutFlipIndex].src}
+                                alt={aboutFlipItems[aboutFlipIndex].alt}
+                                fill
+                                sizes="192px"
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="absolute inset-0 backface-hidden transform-[rotateY(180deg)]">
+                              <Image
+                                src={aboutFlipItems[aboutNextFlipIndex].src}
+                                alt={aboutFlipItems[aboutNextFlipIndex].alt}
+                                fill
+                                sizes="192px"
+                                className="object-cover"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative w-full h-full">
+                            <Image
+                              src={aboutFlipItems[aboutFlipIndex].src}
+                              alt={aboutFlipItems[aboutFlipIndex].alt}
+                              fill
+                              sizes="192px"
+                              className="object-cover"
+                            />
+                          </div>
+                        )}
+                      </button>
+                      {!hasSeenFlipHint && (
+                        <p className="mt-3 text-xs sm:text-sm text-lime-400 animate-pulse">
+                          Cliquez sur le logo pour voir des photos
+                        </p>
+                      )}
                       <p className="mt-4 text-xl font-semibold text-white">Victor Verissimo</p>
                       <p className="text-lime-500">@victor_vrsm</p>
                     </div>
@@ -611,8 +696,15 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-6 sm:px-6 lg:px-8">
             <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-3 text-center md:text-left">
               <div className="md:col-span-2 flex flex-col items-center md:items-start">
-                <a href="#" className="text-2xl font-bold gradient-text">
-                  VICTOR VERISSIMO
+                <a href="#" className="flex items-center gap-3">
+                  <Image
+                    src="/logo.jpg"
+                    alt="Logo Victor Verissimo"
+                    width={40}
+                    height={40}
+                    className="rounded-full border border-white/20"
+                  />
+                  <span className="text-2xl font-bold gradient-text">VICTOR VERISSIMO</span>
                 </a>
                 <p className="text-gray-400 mt-4 max-w-md leading-relaxed">
                   Coach sportif spécialisé en transformation physique.
