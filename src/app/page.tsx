@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Script from "next/script";
 import { useContactForm } from "@/hooks/useContactForm";
+import { Testimonial, initializeTestimonials, defaultTestimonials } from "@/hooks/useTestimonials";
 
 // Icons as simple SVG components
 const InstagramIcon = () => (
@@ -90,27 +91,9 @@ const services = [
   },
 ];
 
-// Testimonials data
-const testimonials = [
-  {
-    avatar: "JD",
-    name: "Jean Dupont",
-    result: "-15 kg en 3 mois",
-    text: "Victor m'a aidé à transformer ma vie. Son approche personnalisée et son soutien constant ont été décisifs.",
-  },
-  {
-    avatar: "MB",
-    name: "Marie Beaumont",
-    result: "+8 kg de muscle",
-    text: "Incroyable ! En 4 mois, j'ai gagné du muscle et perdu de la graisse. Victor sait vraiment ce qu'il fait.",
-  },
-  {
-    avatar: "PP",
-    name: "Pierre Paulin",
-    result: "Transformation complète",
-    text: "Le meilleur investissement que j'ai pu faire. Victor change les vies, c'est un vrai champion.",
-  },
-];
+// Testimonials data - now loaded dynamically from localStorage
+// Default values kept for SSR/initial render
+const staticTestimonials = defaultTestimonials;
 
 const aboutFlipItems = [
   {
@@ -151,7 +134,14 @@ export default function Home() {
   const [aboutNextFlipIndex, setAboutNextFlipIndex] = useState<number | null>(null);
   const [isAboutFlipping, setIsAboutFlipping] = useState(false);
   const [hasSeenFlipHint, setHasSeenFlipHint] = useState(false);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(staticTestimonials);
   const { submit, isLoading, isSuccess, isError, error } = useContactForm();
+
+  // Load testimonials from localStorage on mount
+  useEffect(() => {
+    const loaded = initializeTestimonials();
+    setTestimonials(loaded);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -511,9 +501,9 @@ export default function Home() {
             </div>
 
             <div className="grid md:grid-cols-3 gap-6">
-              {testimonials.map((testimonial, index) => (
+              {testimonials.map((testimonial) => (
                 <div
-                  key={index}
+                  key={testimonial.id}
                   className="glass rounded-2xl p-6 hover-lift"
                 >
                   <div className="flex items-center gap-4 mb-4">
