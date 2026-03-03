@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { supabase, DbAdminUser } from "@/lib/supabase";
 
 interface User {
   id: string;
@@ -14,11 +15,9 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
-const STORAGE_KEY = "admin_auth";
-const USERS_KEY = "admin_users";
+const SESSION_KEY = "admin_session";
 
-// Simple hash function for demo purposes
-// In production, use a proper backend with bcrypt
+// Simple hash function - in production use bcrypt on server
 const simpleHash = (str: string): string => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -38,39 +37,62 @@ export function useAuth() {
 
   // Check for existing session on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const user = JSON.parse(stored) as User;
-        setState({ user, isLoading: false, isAuthenticated: true });
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
+    const checkSession = async () => {
+      const sessionData = localStorage.getItem(SESSION_KEY);
+      if (sessionData) {
+        try {
+          const user = JSON.parse(sessionData) as User;
+          // Verify user still exists in database
+          const { data } = await supabase
+            .from("admin_users")
+            .select("id, email, nom")
+            .eq("id", user.id)
+            .single();
+
+          if (data) {
+            setState({ user: data, isLoading: false, isAuthenticated: true });
+          } else {
+            localStorage.removeItem(SESSION_KEY);
+            setState({ user: null, isLoading: false, isAuthenticated: false });
+          }
+        } catch {
+          localStorage.removeItem(SESSION_KEY);
+          setState({ user: null, isLoading: false, isAuthenticated: false });
+        }
+      } else {
         setState({ user: null, isLoading: false, isAuthenticated: false });
       }
-    } else {
-      setState({ user: null, isLoading: false, isAuthenticated: false });
-    }
+    };
+
+    checkSession();
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    const usersRaw = localStorage.getItem(USERS_KEY);
-    const users: Array<{ id: string; email: string; nom: string; passwordHash: string }> = usersRaw ? JSON.parse(usersRaw) : [];
+    try {
+      const { data: user, error } = await supabase
+        .from("admin_users")
+        .select("*")
+        .eq("email", email.toLowerCase())
+        .single();
 
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (error || !user) {
+        return { success: false, error: "Aucun compte trouvé avec cet email" };
+      }
 
-    if (!user) {
-      return { success: false, error: "Aucun compte trouvé avec cet email" };
+      const typedUser = user as DbAdminUser;
+
+      if (typedUser.password_hash !== simpleHash(password)) {
+        return { success: false, error: "Mot de passe incorrect" };
+      }
+
+      const sessionUser: User = { id: typedUser.id, email: typedUser.email, nom: typedUser.nom };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+      setState({ user: sessionUser, isLoading: false, isAuthenticated: true });
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: "Erreur de connexion" };
     }
-
-    if (user.passwordHash !== simpleHash(password)) {
-      return { success: false, error: "Mot de passe incorrect" };
-    }
-
-    const sessionUser: User = { id: user.id, email: user.email, nom: user.nom };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
-    setState({ user: sessionUser, isLoading: false, isAuthenticated: true });
-
-    return { success: true };
   }, []);
 
   const register = useCallback(async (
@@ -82,33 +104,45 @@ export function useAuth() {
       return { success: false, error: "Le mot de passe doit contenir au moins 6 caractères" };
     }
 
-    const usersRaw = localStorage.getItem(USERS_KEY);
-    const users: Array<{ id: string; email: string; nom: string; passwordHash: string }> = usersRaw ? JSON.parse(usersRaw) : [];
+    try {
+      // Check if user already exists
+      const { data: existing } = await supabase
+        .from("admin_users")
+        .select("id")
+        .eq("email", email.toLowerCase())
+        .single();
 
-    const existingUser = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (existingUser) {
-      return { success: false, error: "Un compte existe déjà avec cet email" };
+      if (existing) {
+        return { success: false, error: "Un compte existe déjà avec cet email" };
+      }
+
+      // Create new user
+      const { data: newUser, error } = await supabase
+        .from("admin_users")
+        .insert({
+          email: email.toLowerCase(),
+          nom,
+          password_hash: simpleHash(password),
+        })
+        .select()
+        .single();
+
+      if (error || !newUser) {
+        return { success: false, error: "Erreur lors de la création du compte" };
+      }
+
+      const sessionUser: User = { id: newUser.id, email: newUser.email, nom: newUser.nom };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+      setState({ user: sessionUser, isLoading: false, isAuthenticated: true });
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: "Erreur lors de l'inscription" };
     }
-
-    const newUser = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-      email,
-      nom,
-      passwordHash: simpleHash(password),
-    };
-
-    users.push(newUser);
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-
-    const sessionUser: User = { id: newUser.id, email: newUser.email, nom: newUser.nom };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
-    setState({ user: sessionUser, isLoading: false, isAuthenticated: true });
-
-    return { success: true };
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SESSION_KEY);
     setState({ user: null, isLoading: false, isAuthenticated: false });
   }, []);
 

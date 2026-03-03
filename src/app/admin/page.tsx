@@ -1,25 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 
-import { ContactMessage, MESSAGES_STORAGE_KEY } from "@/hooks/useContactForm";
-import { Testimonial, TESTIMONIALS_STORAGE_KEY, initializeTestimonials } from "@/hooks/useTestimonials";
+import { ContactMessage } from "@/hooks/useContactForm";
+import { Testimonial, fetchTestimonials, addTestimonial, updateTestimonial, deleteTestimonialFromDb } from "@/hooks/useTestimonials";
 
-// Client type and storage
+// Client type
 export interface Client {
   id: string;
   nom: string;
   email: string;
   telephone: string;
   objectif: string;
-  dateInscription: string;
+  date_inscription: string;
   actif: boolean;
 }
-
-export const CLIENTS_STORAGE_KEY = "admin_clients";
 
 // Icons
 const PlusIcon = () => (
@@ -102,54 +101,38 @@ export default function AdminPage() {
 
   const unreadCount = messages.filter((m) => !m.lu).length;
 
-  // Load messages from localStorage on mount
+  // Load messages from Supabase on mount
   useEffect(() => {
-    const stored = localStorage.getItem(MESSAGES_STORAGE_KEY);
-    if (stored) {
-      try {
-        setMessages(JSON.parse(stored));
-      } catch {
-        setMessages([]);
-      }
-    }
+    const loadMessages = async () => {
+      const { data } = await supabase
+        .from("contact_messages")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (data) setMessages(data);
+    };
+    loadMessages();
   }, []);
 
-  // Load clients from localStorage on mount
+  // Load clients from Supabase on mount
   useEffect(() => {
-    const stored = localStorage.getItem(CLIENTS_STORAGE_KEY);
-    if (stored) {
-      try {
-        setClients(JSON.parse(stored));
-      } catch {
-        setClients([]);
-      }
-    }
+    const loadClients = async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (data) setClients(data);
+    };
+    loadClients();
   }, []);
 
-  // Save messages to localStorage whenever they change
+  // Load testimonials from Supabase on mount
   useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messages));
-    }
-  }, [messages]);
-
-  // Save clients to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(clients));
-  }, [clients]);
-
-  // Load testimonials from localStorage on mount
-  useEffect(() => {
-    const loaded = initializeTestimonials();
-    setTestimonials(loaded);
+    const loadTestimonials = async () => {
+      const data = await fetchTestimonials();
+      setTestimonials(data);
+    };
+    loadTestimonials();
   }, []);
-
-  // Save testimonials to localStorage whenever they change
-  useEffect(() => {
-    if (testimonials.length > 0) {
-      localStorage.setItem(TESTIMONIALS_STORAGE_KEY, JSON.stringify(testimonials));
-    }
-  }, [testimonials]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -158,18 +141,16 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, authLoading, router]);
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
+    await supabase.from("contact_messages").update({ lu: true }).eq("id", id);
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, lu: true } : m))
     );
   };
 
-  const deleteMessage = (id: string) => {
-    setMessages((prev) => {
-      const updated = prev.filter((m) => m.id !== id);
-      localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
+  const deleteMessage = async (id: string) => {
+    await supabase.from("contact_messages").delete().eq("id", id);
+    setMessages((prev) => prev.filter((m) => m.id !== id));
   };
 
   // Client CRUD operations
@@ -197,11 +178,22 @@ export default function AdminPage() {
     setClientForm({ nom: "", email: "", telephone: "", objectif: "", actif: true });
   };
 
-  const saveClient = () => {
+  const saveClient = async () => {
     if (!clientForm.nom || !clientForm.email) return;
 
     if (editingClient) {
-      // Edit existing client
+      // Edit existing client in Supabase
+      await supabase
+        .from("clients")
+        .update({
+          nom: clientForm.nom,
+          email: clientForm.email,
+          telephone: clientForm.telephone,
+          objectif: clientForm.objectif,
+          actif: clientForm.actif,
+        })
+        .eq("id", editingClient.id);
+      
       setClients((prev) =>
         prev.map((c) =>
           c.id === editingClient.id
@@ -210,26 +202,37 @@ export default function AdminPage() {
         )
       );
     } else {
-      // Add new client
-      const newClient: Client = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-        nom: clientForm.nom,
-        email: clientForm.email,
-        telephone: clientForm.telephone,
-        objectif: clientForm.objectif,
-        dateInscription: new Date().toISOString().split("T")[0],
-        actif: clientForm.actif,
-      };
-      setClients((prev) => [newClient, ...prev]);
+      // Add new client to Supabase
+      const { data: newClient } = await supabase
+        .from("clients")
+        .insert({
+          nom: clientForm.nom,
+          email: clientForm.email,
+          telephone: clientForm.telephone,
+          objectif: clientForm.objectif,
+          date_inscription: new Date().toISOString().split("T")[0],
+          actif: clientForm.actif,
+        })
+        .select()
+        .single();
+      
+      if (newClient) {
+        setClients((prev) => [newClient, ...prev]);
+      }
     }
     closeClientModal();
   };
 
-  const deleteClient = (id: string) => {
+  const deleteClient = async (id: string) => {
+    await supabase.from("clients").delete().eq("id", id);
     setClients((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const toggleClientStatus = (id: string) => {
+  const toggleClientStatus = async (id: string) => {
+    const client = clients.find((c) => c.id === id);
+    if (!client) return;
+    
+    await supabase.from("clients").update({ actif: !client.actif }).eq("id", id);
     setClients((prev) =>
       prev.map((c) => (c.id === id ? { ...c, actif: !c.actif } : c))
     );
@@ -267,38 +270,44 @@ export default function AdminPage() {
     return name.slice(0, 2).toUpperCase();
   };
 
-  const saveTestimonial = () => {
+  const saveTestimonial = async () => {
     if (!testimonialForm.name || !testimonialForm.text) return;
 
     const avatar = testimonialForm.avatar || generateAvatar(testimonialForm.name);
 
     if (editingTestimonial) {
-      setTestimonials((prev) =>
-        prev.map((t) =>
-          t.id === editingTestimonial.id
-            ? { ...t, ...testimonialForm, avatar }
-            : t
-        )
-      );
+      const success = await updateTestimonial(editingTestimonial.id, {
+        ...testimonialForm,
+        avatar,
+      });
+      if (success) {
+        setTestimonials((prev) =>
+          prev.map((t) =>
+            t.id === editingTestimonial.id
+              ? { ...t, ...testimonialForm, avatar }
+              : t
+          )
+        );
+      }
     } else {
-      const newTestimonial: Testimonial = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+      const newTestimonial = await addTestimonial({
         name: testimonialForm.name,
         avatar,
         result: testimonialForm.result,
         text: testimonialForm.text,
-      };
-      setTestimonials((prev) => [newTestimonial, ...prev]);
+      });
+      if (newTestimonial) {
+        setTestimonials((prev) => [newTestimonial, ...prev]);
+      }
     }
     closeTestimonialModal();
   };
 
-  const deleteTestimonial = (id: string) => {
-    setTestimonials((prev) => {
-      const updated = prev.filter((t) => t.id !== id);
-      localStorage.setItem(TESTIMONIALS_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
+  const deleteTestimonial = async (id: string) => {
+    const success = await deleteTestimonialFromDb(id);
+    if (success) {
+      setTestimonials((prev) => prev.filter((t) => t.id !== id));
+    }
   };
 
   // Dashboard stats
@@ -306,7 +315,7 @@ export default function AdminPage() {
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   const newClientsThisMonth = clients.filter((c) => {
-    const date = new Date(c.dateInscription);
+    const date = new Date(c.date_inscription);
     return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
   }).length;
 
@@ -605,7 +614,7 @@ export default function AdminPage() {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-gray-500 text-sm">Inscrit le {client.dateInscription}</p>
+                        <p className="text-gray-500 text-sm">Inscrit le {client.date_inscription}</p>
                         {client.objectif && (
                           <span className="inline-block mt-1 px-3 py-1 rounded-full text-xs font-medium bg-lime-500/20 text-lime-500">
                             {client.objectif}

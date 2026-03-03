@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type ContactPayload = {
   nom: string;
@@ -17,26 +18,22 @@ export type ContactMessage = {
   lu: boolean;
 };
 
-export const MESSAGES_STORAGE_KEY = "admin_contact_messages";
-
 type SubmitState = "idle" | "loading" | "success" | "error";
 
-// Save message to localStorage for admin panel
-const saveMessageToStorage = (payload: ContactPayload) => {
-  const newMessage: ContactMessage = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-    nom: payload.nom,
-    email: payload.email,
-    objectif: payload.objectif,
-    message: payload.message,
-    date: new Date().toISOString().split("T")[0],
-    lu: false,
-  };
+// Save message to Supabase
+const saveMessageToSupabase = async (payload: ContactPayload): Promise<boolean> => {
+  const { error } = await supabase
+    .from("contact_messages")
+    .insert({
+      nom: payload.nom,
+      email: payload.email,
+      objectif: payload.objectif,
+      message: payload.message,
+      date: new Date().toISOString().split("T")[0],
+      lu: false,
+    });
 
-  const existingRaw = localStorage.getItem(MESSAGES_STORAGE_KEY);
-  const existing: ContactMessage[] = existingRaw ? JSON.parse(existingRaw) : [];
-  existing.unshift(newMessage);
-  localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(existing));
+  return !error;
 };
 
 export function useContactForm() {
@@ -50,8 +47,11 @@ export function useContactForm() {
       setState("loading");
       setError("");
 
-      // Always save to localStorage for admin panel
-      saveMessageToStorage(payload);
+      // Save to Supabase
+      const saved = await saveMessageToSupabase(payload);
+      if (!saved) {
+        throw new Error("Failed to save to database");
+      }
 
       // If external URL is configured, also send there
       if (url) {
