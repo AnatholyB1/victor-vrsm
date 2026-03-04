@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Script from "next/script";
 import { useContactForm } from "@/hooks/useContactForm";
-import { Testimonial, initializeTestimonials, defaultTestimonials } from "@/hooks/useTestimonials";
+import { Testimonial, fetchTestimonials, defaultTestimonials } from "@/hooks/useTestimonials";
 
 // Icons as simple SVG components
 const InstagramIcon = () => (
@@ -137,10 +137,13 @@ export default function Home() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>(staticTestimonials);
   const { submit, isLoading, isSuccess, isError, error } = useContactForm();
 
-  // Load testimonials from localStorage on mount
+  // Load testimonials from Supabase on mount
   useEffect(() => {
-    const loaded = initializeTestimonials();
-    setTestimonials(loaded);
+    const loadTestimonials = async () => {
+      const data = await fetchTestimonials();
+      setTestimonials(data);
+    };
+    loadTestimonials();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
