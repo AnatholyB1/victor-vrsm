@@ -97,7 +97,11 @@ export default function AdminPage() {
     avatar: "",
     result: "",
     text: "",
+    photo_url: "",
   });
+  const [testimonialPhotoFile, setTestimonialPhotoFile] = useState<File | null>(null);
+  const [testimonialPhotoPreview, setTestimonialPhotoPreview] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const unreadCount = messages.filter((m) => !m.lu).length;
 
@@ -241,7 +245,9 @@ export default function AdminPage() {
   // Testimonial CRUD operations
   const openAddTestimonialModal = () => {
     setEditingTestimonial(null);
-    setTestimonialForm({ name: "", avatar: "", result: "", text: "" });
+    setTestimonialForm({ name: "", avatar: "", result: "", text: "", photo_url: "" });
+    setTestimonialPhotoFile(null);
+    setTestimonialPhotoPreview(null);
     setShowTestimonialModal(true);
   };
 
@@ -252,14 +258,19 @@ export default function AdminPage() {
       avatar: testimonial.avatar,
       result: testimonial.result,
       text: testimonial.text,
+      photo_url: testimonial.photo_url ?? "",
     });
+    setTestimonialPhotoFile(null);
+    setTestimonialPhotoPreview(testimonial.photo_url ?? null);
     setShowTestimonialModal(true);
   };
 
   const closeTestimonialModal = () => {
     setShowTestimonialModal(false);
     setEditingTestimonial(null);
-    setTestimonialForm({ name: "", avatar: "", result: "", text: "" });
+    setTestimonialForm({ name: "", avatar: "", result: "", text: "", photo_url: "" });
+    setTestimonialPhotoFile(null);
+    setTestimonialPhotoPreview(null);
   };
 
   const generateAvatar = (name: string): string => {
@@ -270,21 +281,59 @@ export default function AdminPage() {
     return name.slice(0, 2).toUpperCase();
   };
 
+  const uploadTestimonialPhoto = async (file: File): Promise<string | null> => {
+    const ext = file.name.split(".").pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage
+      .from("testimonial-photos")
+      .upload(fileName, file, { cacheControl: "3600", upsert: false });
+    if (error) return null;
+    const { data } = supabase.storage.from("testimonial-photos").getPublicUrl(fileName);
+    return data.publicUrl;
+  };
+
+  const deleteTestimonialPhoto = async (photoUrl: string) => {
+    try {
+      const parts = photoUrl.split("/testimonial-photos/");
+      if (parts.length < 2) return;
+      const fileName = parts[1];
+      await supabase.storage.from("testimonial-photos").remove([fileName]);
+    } catch {
+      // silent fail
+    }
+  };
+
   const saveTestimonial = async () => {
     if (!testimonialForm.name || !testimonialForm.text) return;
 
     const avatar = testimonialForm.avatar || generateAvatar(testimonialForm.name);
+    let photo_url = testimonialForm.photo_url;
+
+    // Upload new photo if a file was selected
+    if (testimonialPhotoFile) {
+      setIsUploadingPhoto(true);
+      const uploaded = await uploadTestimonialPhoto(testimonialPhotoFile);
+      setIsUploadingPhoto(false);
+      if (uploaded) {
+        // Delete old photo if replacing
+        if (editingTestimonial?.photo_url) {
+          await deleteTestimonialPhoto(editingTestimonial.photo_url);
+        }
+        photo_url = uploaded;
+      }
+    }
 
     if (editingTestimonial) {
       const success = await updateTestimonial(editingTestimonial.id, {
         ...testimonialForm,
         avatar,
+        photo_url: photo_url || undefined,
       });
       if (success) {
         setTestimonials((prev) =>
           prev.map((t) =>
             t.id === editingTestimonial.id
-              ? { ...t, ...testimonialForm, avatar }
+              ? { ...t, ...testimonialForm, avatar, photo_url: photo_url || undefined }
               : t
           )
         );
@@ -295,6 +344,7 @@ export default function AdminPage() {
         avatar,
         result: testimonialForm.result,
         text: testimonialForm.text,
+        photo_url: photo_url || undefined,
       });
       if (newTestimonial) {
         setTestimonials((prev) => [newTestimonial, ...prev]);
@@ -304,6 +354,10 @@ export default function AdminPage() {
   };
 
   const deleteTestimonial = async (id: string) => {
+    const testimonial = testimonials.find((t) => t.id === id);
+    if (testimonial?.photo_url) {
+      await deleteTestimonialPhoto(testimonial.photo_url);
+    }
     const success = await deleteTestimonialFromDb(id);
     if (success) {
       setTestimonials((prev) => prev.filter((t) => t.id !== id));
@@ -702,6 +756,18 @@ export default function AdminPage() {
 
                     <p className="text-gray-300 mb-4 italic">&ldquo;{testimonial.text}&rdquo;</p>
 
+                    {/* Photo thumbnail */}
+                    {testimonial.photo_url && (
+                      <div className="mb-4 w-full max-w-xs h-36 rounded-xl overflow-hidden border border-white/10">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={testimonial.photo_url}
+                          alt={`Photo de ${testimonial.name}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
                     <div className="flex gap-3">
                       <button
                         onClick={() => openEditTestimonialModal(testimonial)}
@@ -912,6 +978,65 @@ export default function AdminPage() {
                 />
               </div>
 
+              {/* Photo upload */}
+              <div>
+                <label className="block text-gray-300 mb-2">
+                  Photo de transformation
+                  <span className="text-gray-500 font-normal ml-1">(optionnel)</span>
+                </label>
+
+                {/* Preview */}
+                {testimonialPhotoPreview && (
+                  <div className="relative mb-3 w-full h-40 rounded-xl overflow-hidden border border-white/10">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={testimonialPhotoPreview}
+                      alt="Aperçu"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestimonialPhotoPreview(null);
+                        setTestimonialPhotoFile(null);
+                        setTestimonialForm({ ...testimonialForm, photo_url: "" });
+                      }}
+                      className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-500/80 transition-colors"
+                      aria-label="Supprimer la photo"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                <label className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-xl bg-white/5 border border-dashed border-white/20 text-gray-400 hover:border-lime-500 hover:text-lime-500 transition-colors cursor-pointer">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm">
+                    {testimonialPhotoFile ? testimonialPhotoFile.name : "Choisir une photo (JPG, PNG, WEBP)"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert("La photo ne doit pas dépasser 5 Mo.");
+                        return;
+                      }
+                      setTestimonialPhotoFile(file);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setTestimonialPhotoPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+                <p className="text-gray-600 text-xs mt-1">Max 5 Mo – JPG, PNG ou WEBP</p>
+              </div>
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -922,9 +1047,10 @@ export default function AdminPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 gradient-bg text-black font-bold py-3 rounded-xl hover:opacity-90 transition-opacity"
+                  disabled={isUploadingPhoto}
+                  className="flex-1 gradient-bg text-black font-bold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-60"
                 >
-                  {editingTestimonial ? "Enregistrer" : "Ajouter"}
+                  {isUploadingPhoto ? "Upload en cours..." : editingTestimonial ? "Enregistrer" : "Ajouter"}
                 </button>
               </div>
             </form>

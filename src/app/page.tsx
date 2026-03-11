@@ -135,6 +135,7 @@ export default function Home() {
   const [isAboutFlipping, setIsAboutFlipping] = useState(false);
   const [hasSeenFlipHint, setHasSeenFlipHint] = useState(false);
   const [testimonials, setTestimonials] = useState<Testimonial[]>(staticTestimonials);
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; name: string } | null>(null);
   const { submit, isLoading, isSuccess, isError, error } = useContactForm();
 
   // Load testimonials from Supabase on mount
@@ -529,8 +530,76 @@ export default function Home() {
                 </div>
               ))}
             </div>
+
+            {/* Photo gallery — shown only when at least one testimonial has a photo */}
+            {testimonials.some((t) => t.photo_url) && (
+              <div className="mt-16">
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl md:text-3xl font-bold text-white mb-2">
+                    Leurs <span className="gradient-text">Transformations</span>
+                  </h3>
+                  <p className="text-gray-400">Cliquez sur une photo pour l&apos;agrandir</p>
+                </div>
+
+                <div className="columns-2 md:columns-3 lg:columns-4 gap-x-4">
+                  {testimonials
+                    .filter((t) => t.photo_url)
+                    .map((t, i) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setLightboxPhoto({ url: t.photo_url!, name: t.name })}
+                        className={`animate-fade-in-up photo-hover stagger-${Math.min(i, 11)} break-inside-avoid w-full block rounded-2xl overflow-hidden border border-white/10 focus:outline-none focus:ring-2 focus:ring-lime-500 mb-4`}
+                        aria-label={`Voir la transformation de ${t.name}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={t.photo_url}
+                          alt={`Transformation de ${t.name}`}
+                          className="w-full object-cover"
+                          loading="lazy"
+                        />
+                        <div className="px-3 py-2 bg-black/60 backdrop-blur-sm">
+                          <p className="text-white text-sm font-semibold truncate">{t.name}</p>
+                          <p className="text-lime-500 text-xs truncate">{t.result}</p>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
+
+        {/* Lightbox */}
+        {lightboxPhoto && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90"
+            onClick={() => setLightboxPhoto(null)}
+          >
+            <div
+              className="animate-scale-in relative max-w-3xl w-full rounded-2xl overflow-hidden border border-white/10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={lightboxPhoto.url}
+                alt={`Transformation de ${lightboxPhoto.name}`}
+                className="w-full max-h-[80vh] object-contain bg-black"
+              />
+              <div className="px-4 py-3 glass flex items-center justify-between">
+                <p className="text-white font-semibold">{lightboxPhoto.name}</p>
+                <button
+                  onClick={() => setLightboxPhoto(null)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                  aria-label="Fermer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Contact Section */}
         <section id="contact" className="py-24 relative">
@@ -733,6 +802,13 @@ export default function Home() {
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+                <a
+                  href="/mentions-legales"
+                  className="text-gray-500 text-sm hover:text-lime-500 transition-colors"
+                >
+                  Mentions légales
+                </a>
+                <span className="hidden sm:inline text-gray-700">•</span>
                 <p className="text-gray-500 text-sm">Coach sportif certifié</p>
                 <span className="hidden sm:inline text-gray-700">•</span>
                 <a
@@ -741,7 +817,16 @@ export default function Home() {
                   rel="noopener noreferrer"
                   className="text-gray-500 text-sm hover:text-lime-500 transition-colors"
                 >
-                  Site créé par selenium-studio.com
+                  selenium-studio.com
+                </a>
+                <span className="hidden sm:inline text-gray-700">&</span>
+                <a
+                  href="https://anatholy-bricon.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-500 text-sm hover:text-lime-500 transition-colors"
+                >
+                  anatholy-bricon.com
                 </a>
               </div>
             </div>

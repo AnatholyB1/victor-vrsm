@@ -6,6 +6,7 @@ export interface Testimonial {
   name: string;
   result: string;
   text: string;
+  photo_url?: string;
 }
 
 // Default testimonials for SSR/initial render

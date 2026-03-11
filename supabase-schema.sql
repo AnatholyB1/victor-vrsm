@@ -32,8 +32,18 @@ CREATE TABLE IF NOT EXISTS testimonials (
   name TEXT NOT NULL,
   result TEXT NOT NULL,
   text TEXT NOT NULL,
+  photo_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ajouter photo_url sur une base existante (ignorer si déjà fait)
+ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS photo_url TEXT;
+
+-- Storage bucket pour les photos de témoignages
+-- À créer via le dashboard Supabase > Storage > New bucket
+-- Nom : testimonial-photos  |  Public : true
+-- Ou via SQL (extension pgsodium requise sur certains plans) :
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('testimonial-photos', 'testimonial-photos', true) ON CONFLICT DO NOTHING;
 
 -- Table des utilisateurs admin
 CREATE TABLE IF NOT EXISTS admin_users (
